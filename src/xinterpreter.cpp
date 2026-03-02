@@ -336,19 +336,41 @@ namespace xpyt
         }
         catch (py::error_already_set& e)
         {
+            std::cout << "\n--> python script error caught : " << e.what() << std::endl;
+            std::cout << "\n--> python script executed:\n####\n" << code << "\n####\n" << std::endl;
             // This will grab the latest traceback and set shell.last_error
             m_ipython_shell.attr("showtraceback")();
-
-            py::list pyerror = m_ipython_shell.attr("last_error");
-
-            xerror error = extract_error(pyerror);
-
-            publish_execution_error(error.m_ename, error.m_evalue, error.m_traceback);
-            error.m_traceback.resize(1);
-            error.m_traceback[0] = code;
-
-            return xeus::create_error_reply(error.m_ename, error.m_evalue, error.m_traceback);
         }
+
+        std::cout << "\n--> processing error ... " << std::endl;
+        py::list pyerror = [&]() -> py::list {
+            try {
+                auto last_error = m_ipython_shell.attr("last_error");
+                std::cout << "\n--> converting last_error to list ... " << std::endl;
+                return py::list(last_error);
+            }
+            catch (py::error_already_set& e)
+            {
+                std::cout << "\n--> processing error: failed acquiring `last_error` " << std::endl;
+                return py::list{};
+            }
+        }();
+
+        if (pyerror.empty())
+        {
+            return xeus::create_error_reply("SNAFU", "python SNAFU");
+        }
+
+        std::cout << "\n--> A " << std::endl;
+        xerror error = extract_error(pyerror);
+        std::cout << "\n--> B " << std::endl;
+        publish_execution_error(error.m_ename, error.m_evalue, error.m_traceback);
+        std::cout << "\n--> C " << std::endl;
+        error.m_traceback.resize(1);
+        error.m_traceback[0] = code;
+        std::cout << "\n--> D " << std::endl;
+        return xeus::create_error_reply(error.m_ename, error.m_evalue, error.m_traceback);
+        
     }
 
     void interpreter::set_request_context(xeus::xrequest_context context)
